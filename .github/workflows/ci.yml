@@ -1,0 +1,155 @@
+# Actions are pinned by commit SHA; the comment shows the readable version.
+# Validates the stack, starts it for real and scans the pinned image.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Scheduled runs catch image vulnerabilities published after the last push.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+  ACTIONLINT_IMAGE: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+jobs:
+  validate:
+    name: Validate compose and workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # On the server vps-edge creates this network; here it is a stand-in.
+      - name: Create external network
+        run: docker network create --internal monitoring
+
+      - name: Validate compose.yaml
+        run: docker compose config --quiet
+
+      - name: Lint workflows (actionlint)
+        run: docker run --rm -v "${PWD}:/repo" -w /repo "${ACTIONLINT_IMAGE}" -color
+
+  smoke-test:
+    name: Start stack and check security properties
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start stack
+        run: |
+          docker network create --internal monitoring
+          docker compose up -d
+
+      - name: Wait until Uptime Kuma answers
+        run: |
+          set -Eeuo pipefail
+          for _ in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3001/; then
+              echo "Uptime Kuma answers on 127.0.0.1:3001"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::Uptime Kuma did not answer within 3 minutes"
+          exit 1
+
+      # The dashboard must only be reachable through an SSH tunnel.
+      - name: Port is bound to localhost only
+        run: |
+          set -Eeuo pipefail
+          bindings="$(docker compose port uptime-kuma 3001)"
+          echo "Port bindings: ${bindings}"
+          test -n "${bindings}"
+          if grep -qv '^127\.0\.0\.1:' <<< "${bindings}"; then
+            echo "::error::Port 3001 is published beyond 127.0.0.1"
+            exit 1
+          fi
+
+      - name: Container runs as non-root user
+        run: |
+          set -Eeuo pipefail
+          uid="$(docker compose exec -T uptime-kuma id -u)"
+          echo "uid=${uid}"
+          test "${uid}" != "0"
+
+      # Kuma may only see Caddy (network "monitoring") and the internet, never a project network.
+      - name: Container is only in the expected networks
+        run: |
+          set -Eeuo pipefail
+          networks="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$(docker compose ps -q uptime-kuma)")"
+          echo "Networks: ${networks}"
+          test "$(tr ' ' '\n' <<< "${networks}" | sed '/^$/d' | sort | tr '\n' ' ')" = "monitoring monitoring_outbound "
+
+      - name: No Docker socket mounted
+        run: |
+          set -Eeuo pipefail
+          mounts="$(docker inspect --format '{{range .Mounts}}{{.Source}} {{end}}' "$(docker compose ps -q uptime-kuma)")"
+          echo "Mounts: ${mounts}"
+          if grep -q 'docker.sock' <<< "${mounts}"; then
+            echo "::error::Docker socket is mounted"
+            exit 1
+          fi
+
+      - name: Wait for the image healthcheck
+        run: |
+          set -Eeuo pipefail
+          id="$(docker compose ps -q uptime-kuma)"
+          for _ in $(seq 1 60); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "${id}")"
+            if [ "${status}" = "healthy" ]; then
+              echo "healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Container is not healthy after 5 minutes (status: ${status})"
+          exit 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes
+
+  image-scan:
+    name: Scan pinned image (Trivy)
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Official Trivy image pinned by digest instead of a third-party action.
+      # Reports HIGH and CRITICAL, fails on critical findings that already have a fix.
+      - name: Scan image with Trivy
+        run: |
+          set -Eeuo pipefail
+          image="$(sed -n 's/^ *image: *//p' compose.yaml)"
+          echo "Image: ${image}"
+          docker run --rm "${TRIVY_IMAGE}" image --no-progress --severity HIGH,CRITICAL --ignore-unfixed "${image}"
+          docker run --rm "${TRIVY_IMAGE}" image --no-progress --quiet --severity CRITICAL --ignore-unfixed --exit-code 1 "${image}"
