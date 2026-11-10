@@ -146,10 +146,13 @@ jobs:
 
       # Official Trivy image pinned by digest instead of a third-party action.
       # Reports HIGH and CRITICAL, fails on critical findings that already have a fix.
+      # Accepted risks with reason and expiry date: .trivyignore.yaml
       - name: Scan image with Trivy
         run: |
           set -Eeuo pipefail
           image="$(sed -n 's/^ *image: *//p' compose.yaml)"
           echo "Image: ${image}"
           docker run --rm "${TRIVY_IMAGE}" image --no-progress --severity HIGH,CRITICAL --ignore-unfixed "${image}"
-          docker run --rm "${TRIVY_IMAGE}" image --no-progress --quiet --severity CRITICAL --ignore-unfixed --exit-code 1 "${image}"
+          docker run --rm -v "${PWD}/.trivyignore.yaml:/trivyignore.yaml:ro" "${TRIVY_IMAGE}" \
+            image --no-progress --quiet --severity CRITICAL --ignore-unfixed \
+            --ignorefile /trivyignore.yaml --exit-code 1 "${image}"

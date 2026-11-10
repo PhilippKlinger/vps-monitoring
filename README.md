@@ -33,6 +33,7 @@ flowchart LR
 - `compose.yaml`: Uptime Kuma 2 (`slim-rootless`, pinned by digest) with SQLite in the volume `kuma_data`, no Docker socket, dropped capabilities, resource limits, journald logging
 - `.github/workflows/`: CI (compose validation, actionlint, smoke test of the running stack, Trivy scan of the pinned image), Security Checks (gitleaks, zizmor), CodeQL for the workflows, OpenSSF Scorecard
 - `.github/dependabot.yml`: weekly updates for the image and the pinned actions, 14 days cooldown
+- `.trivyignore.yaml`: accepted image vulnerabilities, each with a reason and an expiry date; after that date the CI fails again
 
 ## Configuration
 
