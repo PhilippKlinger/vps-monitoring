@@ -88,7 +88,7 @@ All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Cert
 | Neuro Check-in · Web | `https://neurocheckin.de/` | `neuro-check-in` |
 | Blog | `https://philippklinger.github.io/my-dso-blog/` | none (internal) |
 
-Next: Conduit (web app and API, status page `conduit`) once it runs on the VPS.
+New projects follow the same pattern: one monitor per public endpoint, one status page per project.
 
 ### Status pages
 
