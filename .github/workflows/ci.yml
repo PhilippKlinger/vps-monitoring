@@ -92,13 +92,14 @@ jobs:
           echo "uid=${uid}"
           test "${uid}" != "0"
 
-      # Kuma may only see Caddy (network "monitoring") and the internet, never a project network.
+      # Kuma may only see Caddy (network "monitoring"), the internet and the incident assistant
+      # (network "incident"), never a project network.
       - name: Container is only in the expected networks
         run: |
           set -Eeuo pipefail
           networks="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$(docker compose ps -q uptime-kuma)")"
           echo "Networks: ${networks}"
-          test "$(tr ' ' '\n' <<< "${networks}" | sed '/^$/d' | sort | tr '\n' ' ')" = "monitoring monitoring_outbound "
+          test "$(tr ' ' '\n' <<< "${networks}" | sed '/^$/d' | sort | tr '\n' ' ')" = "incident monitoring monitoring_outbound "
 
       - name: No Docker socket mounted
         run: |

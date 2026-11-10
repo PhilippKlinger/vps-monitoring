@@ -25,7 +25,7 @@ services:
     # Same as the other stacks: journald deletes logs after 14 days (vps-edge host/journald-retention.conf)
     logging:
       driver: journald
-    networks: [monitoring, outbound]
+    networks: [monitoring, outbound, incident]
 
 networks:
   monitoring:
@@ -35,6 +35,11 @@ networks:
   outbound:
     # Route to the internet for the checks
     driver: bridge
+  incident:
+    # Internal link between Kuma and the incident assistant (webhook only, no route to the internet).
+    # Defined here with a fixed name so the assistant stack can join it as an external network
+    name: incident
+    internal: true
 
 volumes:
   # Keep this volume: losing it means setting up all monitors again and losing the uptime history

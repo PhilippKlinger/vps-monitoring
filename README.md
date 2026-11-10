@@ -27,6 +27,7 @@ flowchart LR
 - Kuma is not part of the network `edge`: it cannot reach any project container and checks every service the way a visitor does (DNS, TLS certificate, Caddy, app).
 - The network `monitoring` belongs to [vps-edge](https://github.com/PhilippKlinger/vps-edge) and is internal. Caddy publishes only the status page, its API, badges and static files; everything else, including the dashboard and login, returns 404.
 - The dashboard is bound to `127.0.0.1:3001` on the server and is only reachable through an SSH tunnel.
+- The network `incident` is defined in this stack, internal, and joined only by Kuma and the incident assistant (`incident-assistant:8080`). It carries the alert webhook and nothing else.
 
 ## Contents
 
@@ -87,8 +88,21 @@ All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Cert
 | Portfolio | `https://philipp-klinger.com/` | `portfolio` |
 | Neuro Check-in · Web | `https://neurocheckin.de/` | `neuro-check-in` |
 | Blog | `https://philippklinger.github.io/my-dso-blog/` | none (internal) |
+| Statusseite | `https://status.philipp-klinger.com/status/videoflix` | none (internal) |
 
 New projects follow the same pattern: one monitor per public endpoint, one status page per project.
+
+### Webhook for the incident assistant
+
+*Settings → Notifications*: add a *Webhook* notification and apply it on all monitors.
+
+| Field | Value |
+|---|---|
+| Post URL | `http://incident-assistant:8080/webhook/kuma` |
+| Request Body | `application/json` |
+| Additional Headers | `{"X-Webhook-Secret": "<from the password manager>"}` |
+
+Kuma reaches the assistant over the internal network `incident`, so the assistant stack has to be running for the notification to arrive.
 
 ### Status pages
 
