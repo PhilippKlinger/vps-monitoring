@@ -1,0 +1,41 @@
+# Monitoring stack: Uptime Kuma checks the public HTTPS addresses and serves the public status page.
+# Caddy (vps-edge) reaches it over the network "monitoring"; no project container is reachable from here.
+name: monitoring
+
+services:
+  uptime-kuma:
+    # slim: SQLite only, no embedded MariaDB or Chromium; rootless: runs as user "node"
+    image: louislam/uptime-kuma:2.5.9-slim-rootless@sha256:053a48927ee714b1da78c6810041a44a266bd8c06dc30ead5b3f459d0f219fb0
+    environment:
+      # Skips the database setup page on the first start; SQLite lives in the volume below
+      UPTIME_KUMA_DB_TYPE: sqlite
+    volumes:
+      # SQLite database: monitors, status pages, notifications and the uptime history
+      - kuma_data:/app/data
+    ports:
+      # Dashboard only through an SSH tunnel. Never bind to 0.0.0.0: Docker bypasses ufw
+      - "127.0.0.1:3001:3001"
+    # The image brings its own healthcheck (extra/healthcheck)
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+    # Same as the other stacks: journald deletes logs after 14 days (vps-edge host/journald-retention.conf)
+    logging:
+      driver: journald
+    networks: [monitoring, outbound]
+
+networks:
+  monitoring:
+    # Created by vps-edge (internal, only Caddy and Kuma): the proxy never depends on this stack
+    name: monitoring
+    external: true
+  outbound:
+    # Route to the internet for the checks
+    driver: bridge
+
+volumes:
+  # Keep this volume: losing it means setting up all monitors again and losing the uptime history
+  kuma_data:
