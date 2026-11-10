@@ -41,7 +41,7 @@ flowchart LR
 |---|---|---|
 | Database | `compose.yaml` (`UPTIME_KUMA_DB_TYPE`) | `sqlite`, skips the setup page |
 | Monitors, status pages, notifications | Kuma dashboard, stored in `kuma_data` | see [Runbook](#runbook) |
-| SMTP credentials for alerts | Kuma dashboard only | never in Git or `.env` |
+| Telegram bot token for alerts | Kuma dashboard only | never in Git or `.env` |
 
 The stack needs no `.env`.
 
@@ -74,7 +74,7 @@ Update: change the image in `compose.yaml` through a pull request (Dependabot), 
 1. Open the dashboard through the tunnel and create the admin account (long password), then enable 2FA under *Settings → Security*.
 2. *Settings → General*: time zone `Europe/Berlin`, *Primary Base URL* `https://status.philipp-klinger.com`.
 3. *Settings → Reverse Proxy*: *Trust Proxy* `Yes` (Caddy sets `X-Forwarded-For`).
-4. *Settings → Notifications*: SMTP notification with an existing mailbox, *Default enabled* and *Apply on all existing monitors*.
+4. *Settings → Notifications*: Telegram notification with a dedicated bot (token and chat ID from the password manager), *Default enabled* and *Apply on all existing monitors*, then *Test*.
 
 ### Monitors
 
@@ -85,7 +85,7 @@ All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Cert
 | Videoflix · Web-App | `https://videoflix.philipp-klinger.com/` | `videoflix` |
 | Videoflix · API | `https://videoflix.philipp-klinger.com/api/health/` | `videoflix` |
 | Portfolio | `https://philipp-klinger.com/` | `portfolio` |
-| Neuro Check-in · Website | `https://neurocheckin.de/` | `neuro-check-in` |
+| Neuro Check-in · Web | `https://neurocheckin.de/` | `neuro-check-in` |
 | Blog | `https://philippklinger.github.io/my-dso-blog/` | none (internal) |
 
 Next: Conduit (web app and API, status page `conduit`) once it runs on the VPS.
@@ -96,7 +96,7 @@ Next: Conduit (web app and API, status page `conduit`) once it runs on the VPS.
 |---|---|---|
 | `videoflix` | Videoflix | Videoflix · Web-App, Videoflix · API |
 | `portfolio` | Portfolio | Portfolio |
-| `neuro-check-in` | Neuro Check-in | Neuro Check-in · Website |
+| `neuro-check-in` | Neuro Check-in | Neuro Check-in · Web |
 
 Leave *Show URL* off, so the page shows neutral names only (no hosts, IPs or ports). `https://status.philipp-klinger.com/` redirects to `/status/videoflix`.
 
