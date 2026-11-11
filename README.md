@@ -16,9 +16,11 @@ flowchart LR
     subgraph vps [VPS]
         caddy["Caddy<br/>(vps-edge)"]
         kuma["Uptime Kuma<br/>(this repo)"]
+        incident["Incident assistant<br/>(vps-incident-assistant)"]
         apps["Project stacks<br/>(e.g. videoflix-deploy)"]
         caddy -- "network edge" --> apps
         caddy -- "network monitoring<br/>status page only" --> kuma
+        kuma -- "network incident<br/>alert webhook" --> incident
     end
     kuma -->|"checks public URLs<br/>(network outbound)"| internet([Internet])
     internet --> caddy
