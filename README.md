@@ -113,7 +113,7 @@ Kuma reaches the assistant over the internal network `incident`, so the assistan
 | `videoflix` | Videoflix | Videoflix · Web-App, Videoflix · API |
 | `portfolio` | Portfolio | Portfolio |
 | `neuro-check-in` | Neuro Check-in | Neuro Check-in · Web |
-| `vps-plattform` | VPS-Plattform | Statusseite |
+| `vps-plattform` | VPS-Platform | Statusseite |
 
 Leave *Show URL* off, so the page shows neutral names only (no hosts, IPs or ports). `https://status.philipp-klinger.com/` redirects to `/status/videoflix`.
 
