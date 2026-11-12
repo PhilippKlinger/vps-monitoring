@@ -90,7 +90,7 @@ All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Cert
 | Portfolio | `https://philipp-klinger.com/` | `portfolio` |
 | Neuro Check-in · Web | `https://neurocheckin.de/` | `neuro-check-in` |
 | Blog | `https://philippklinger.github.io/my-dso-blog/` | none (internal) |
-| Statusseite | `https://status.philipp-klinger.com/status/videoflix` | none (internal) |
+| Statusseite | `https://status.philipp-klinger.com/status/videoflix` | `vps-plattform` |
 
 New projects follow the same pattern: one monitor per public endpoint, one status page per project.
 
@@ -113,6 +113,7 @@ Kuma reaches the assistant over the internal network `incident`, so the assistan
 | `videoflix` | Videoflix | Videoflix · Web-App, Videoflix · API |
 | `portfolio` | Portfolio | Portfolio |
 | `neuro-check-in` | Neuro Check-in | Neuro Check-in · Web |
+| `vps-plattform` | VPS-Plattform | Statusseite |
 
 Leave *Show URL* off, so the page shows neutral names only (no hosts, IPs or ports). `https://status.philipp-klinger.com/` redirects to `/status/videoflix`.
 
