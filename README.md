@@ -8,117 +8,51 @@ Monitoring stack for all projects on the VPS: [Uptime Kuma](https://github.com/l
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/PhilippKlinger/vps-monitoring/badge)](https://scorecard.dev/viewer/?uri=github.com/PhilippKlinger/vps-monitoring)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+## Overview
+
+- Uptime Kuma checks every public address from outside, the way a visitor does (DNS, certificate, proxy, app)
+- Public status page at [status.philipp-klinger.com](https://status.philipp-klinger.com) with one page per project and neutral names only
+- Alerts go to Telegram and to the [incident assistant](https://github.com/PhilippKlinger/vps-incident-assistant)
+- Kuma has no route to the project containers and no Docker socket; the dashboard is not public
+
 ## Architecture
 
 ```mermaid
 flowchart LR
     visitor([Visitor]) -->|HTTPS| caddy
-    admin([Admin]) -->|SSH tunnel| kuma
     subgraph vps [VPS]
         caddy["Caddy<br/>(vps-edge)"]
         kuma["Uptime Kuma<br/>(this repo)"]
         incident["Incident assistant<br/>(vps-incident-assistant)"]
         apps["Project stacks<br/>(e.g. videoflix-deploy)"]
         caddy -- "network edge" --> apps
-        caddy -- "network monitoring<br/>status page only" --> kuma
-        kuma -- "network incident<br/>alert webhook" --> incident
+        caddy -- "status page only" --> kuma
+        kuma -- "alert webhook" --> incident
     end
-    kuma -->|"checks public URLs<br/>(network outbound)"| internet([Internet])
+    kuma -->|checks public URLs| internet([Internet])
     internet --> caddy
 ```
 
-- Kuma is not part of the network `edge`: it cannot reach any project container and checks every service the way a visitor does (DNS, TLS certificate, Caddy, app).
-- The network `monitoring` belongs to [vps-edge](https://github.com/PhilippKlinger/vps-edge) and is internal. Caddy publishes only the status page, its API, badges and static files; everything else, including the dashboard and login, returns 404.
-- The dashboard is bound to localhost on the server and is only reachable through an SSH tunnel.
-- The network `incident` is defined in this stack, internal, and joined only by Kuma and the incident assistant. It carries the alert webhook and nothing else.
+## Tech stack
 
-## Contents
+- Uptime Kuma 2 (`slim-rootless`, pinned by digest) with SQLite
+- Docker Compose, journald
 
-- `compose.yaml`: Uptime Kuma 2 (`slim-rootless`, pinned by digest) with SQLite in the volume `kuma_data`, no Docker socket, dropped capabilities, resource limits, journald logging
-- `.github/workflows/`: the checks under [What CI checks](#what-ci-checks), plus OpenSSF Scorecard
-- `.github/dependabot.yml`: weekly updates for the image and the pinned actions, 14 days cooldown
-- `.trivyignore.yaml`: accepted image vulnerabilities, each with a reason and an expiry date; after that date the CI fails again
-
-## Configuration
-
-| Setting | Where | Value |
-|---|---|---|
-| Database | `compose.yaml` (`UPTIME_KUMA_DB_TYPE`) | `sqlite`, skips the setup page |
-| Monitors, status pages, notifications | Kuma dashboard, stored in `kuma_data` | see [What is monitored](#what-is-monitored) |
-| Telegram bot token for alerts | Kuma dashboard only | never in Git or `.env` |
-
-The stack needs no `.env`. It needs the network `monitoring` of [vps-edge](https://github.com/PhilippKlinger/vps-edge), so vps-edge starts first. Image updates come as Dependabot pull requests; the volume keeps all data.
-
-## What CI checks
-
-Every pull request to `main` must pass these checks before a merge:
+## CI and security
 
 - **Validate compose and workflows:** compose validation, actionlint
-- **Start stack and check security properties:** a real start of the pinned stack (health, dashboard bound to localhost only, non-root, only the expected networks, no Docker socket)
-- **Scan pinned image (Trivy):** the pinned Kuma image; accepted findings live in `.trivyignore.yaml` with a reason and an expiry date
+- **Start stack and check security properties:** health, dashboard bound to localhost, non-root, only the expected networks, no Docker socket
+- **Scan pinned image (Trivy):** accepted findings live in `.trivyignore.yaml` with a reason and an expiry date
 - **Security checks:** secret scan (gitleaks), workflow lint (zizmor), CodeQL for the workflows
 
-## What is monitored
-
-All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Certificate Expiry Notification* on (14 days), accepted status codes 200–299.
-
-| Name (public) | URL | Status page |
-|---|---|---|
-| Videoflix · Web-App | `https://videoflix.philipp-klinger.com/` | `videoflix` |
-| Videoflix · API | `https://videoflix.philipp-klinger.com/api/health/` | `videoflix` |
-| Portfolio | `https://philipp-klinger.com/` | `portfolio` |
-| Neuro Check-in · Web | `https://neurocheckin.de/` | `neuro-check-in` |
-| Blog | `https://philippklinger.github.io/my-dso-blog/` | none (internal) |
-| Statusseite | `https://status.philipp-klinger.com/status/videoflix` | `vps-plattform` |
-
-New projects follow the same pattern: one monitor per public endpoint, one status page per project. Alerts go to Telegram and, as a webhook, to the [incident assistant](https://github.com/PhilippKlinger/vps-incident-assistant).
-
-Status pages:
-
-| Slug | Title | Monitors |
-|---|---|---|
-| `videoflix` | Videoflix | Videoflix · Web-App, Videoflix · API |
-| `portfolio` | Portfolio | Portfolio |
-| `neuro-check-in` | Neuro Check-in | Neuro Check-in · Web |
-| `vps-plattform` | VPS-Platform | Statusseite |
-
-*Show URL* is off, so the page shows neutral names only (no hosts, IPs or ports). `https://status.philipp-klinger.com/` redirects to `/status/videoflix`.
-
-## Limits
-
-- Kuma runs on the same VPS it watches: if the whole server is down, no alert goes out. An external check is planned for later.
-- The public heartbeat API of Kuma 2 returns the 24-hour uptime only; the 30-day value is available as a badge.
-
-## Troubleshooting
-
-Commands run in `/srv/monitoring`. Problems of the proxy itself are in the runbook of [vps-edge](https://github.com/PhilippKlinger/vps-edge#troubleshooting).
-
-### Status page down
-
-**Symptom:** the status page returns 404 or 502, the monitored sites work.
-
-**Check:** `docker compose ps` shows whether `uptime-kuma` is healthy; `docker network inspect monitoring --format '{{range .Containers}}{{.Name}} {{end}}'` must list Caddy and Kuma. A 404 on a path that should be public points to the allowlist in `sites/status.caddy` of vps-edge.
-
-**Fix:** Kuma not healthy → `docker compose logs --tail 50 uptime-kuma`, then `docker compose up -d`. Network missing → start or update vps-edge first, then `docker compose up -d` here.
-
-**Way back:** revert the image update or the allowlist change through a pull request.
-
-### All monitors red
-
-**Symptom:** all monitors report down at the same moment, but the sites open from outside.
-
-**Check:** Kuma reaches nothing outside: `docker compose exec uptime-kuma getent hosts github.com` fails, or the network `outbound` is missing in `docker compose ps --format '{{.Networks}}'`. On the host, `resolvectl status` shows whether DNS works.
-
-**Fix:** `docker compose up -d --force-recreate` attaches the networks again; a DNS problem of the host is fixed on the host. No change in this repository causes this case, so there is nothing to roll back.
-
-**Way back:** none needed.
+All checks are required before a merge. Troubleshooting: [RUNBOOK.md](RUNBOOK.md).
 
 ## Related repositories
 
 | Repository | Role |
 |---|---|
 | [vps-edge](https://github.com/PhilippKlinger/vps-edge) | Publishes the status page and owns the network `monitoring` |
-| [vps-incident-assistant](https://github.com/PhilippKlinger/vps-incident-assistant) | Receives the alert webhook over the network `incident`, uses the Troubleshooting section above as runbook |
+| [vps-incident-assistant](https://github.com/PhilippKlinger/vps-incident-assistant) | Receives the alert webhook and uses RUNBOOK.md as runbook |
 | [videoflix-deploy](https://github.com/PhilippKlinger/videoflix-deploy) | Videoflix stack, watched by two monitors |
 | [v-server-setup](https://github.com/PhilippKlinger/v-server-setup) | How the server is set up and hardened |
 
