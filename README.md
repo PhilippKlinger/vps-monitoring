@@ -8,6 +8,15 @@ Monitoring stack for all projects on the VPS: [Uptime Kuma](https://github.com/l
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/PhilippKlinger/vps-monitoring/badge)](https://scorecard.dev/viewer/?uri=github.com/PhilippKlinger/vps-monitoring)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [CI and security](#ci-and-security)
+- [Related repositories](#related-repositories)
+- [License](#license)
+
 ## Overview
 
 - Uptime Kuma checks every public address from outside, the way a visitor does (DNS, certificate, proxy, app)
