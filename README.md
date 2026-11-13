@@ -4,6 +4,7 @@
 [![Security Checks](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/security.yml/badge.svg)](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/security.yml)
 [![CodeQL](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/codeql.yml/badge.svg)](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/PhilippKlinger/vps-monitoring/badge)](https://scorecard.dev/viewer/?uri=github.com/PhilippKlinger/vps-monitoring)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Monitoring stack for all projects on the VPS: [Uptime Kuma](https://github.com/louislam/uptime-kuma) checks the public HTTPS addresses, sends alerts and serves the public status page at [status.philipp-klinger.com](https://status.philipp-klinger.com).
 
@@ -28,13 +29,13 @@ flowchart LR
 
 - Kuma is not part of the network `edge`: it cannot reach any project container and checks every service the way a visitor does (DNS, TLS certificate, Caddy, app).
 - The network `monitoring` belongs to [vps-edge](https://github.com/PhilippKlinger/vps-edge) and is internal. Caddy publishes only the status page, its API, badges and static files; everything else, including the dashboard and login, returns 404.
-- The dashboard is bound to `127.0.0.1:3001` on the server and is only reachable through an SSH tunnel.
-- The network `incident` is defined in this stack, internal, and joined only by Kuma and the incident assistant (`incident-assistant:8080`). It carries the alert webhook and nothing else.
+- The dashboard is bound to localhost on the server and is only reachable through an SSH tunnel.
+- The network `incident` is defined in this stack, internal, and joined only by Kuma and the incident assistant. It carries the alert webhook and nothing else.
 
 ## Contents
 
 - `compose.yaml`: Uptime Kuma 2 (`slim-rootless`, pinned by digest) with SQLite in the volume `kuma_data`, no Docker socket, dropped capabilities, resource limits, journald logging
-- `.github/workflows/`: CI (compose validation, actionlint, smoke test of the running stack, Trivy scan of the pinned image), Security Checks (gitleaks, zizmor), CodeQL for the workflows, OpenSSF Scorecard
+- `.github/workflows/`: the checks under [What CI checks](#what-ci-checks), plus OpenSSF Scorecard
 - `.github/dependabot.yml`: weekly updates for the image and the pinned actions, 14 days cooldown
 - `.trivyignore.yaml`: accepted image vulnerabilities, each with a reason and an expiry date; after that date the CI fails again
 
@@ -43,43 +44,21 @@ flowchart LR
 | Setting | Where | Value |
 |---|---|---|
 | Database | `compose.yaml` (`UPTIME_KUMA_DB_TYPE`) | `sqlite`, skips the setup page |
-| Monitors, status pages, notifications | Kuma dashboard, stored in `kuma_data` | see [Runbook](#runbook) |
+| Monitors, status pages, notifications | Kuma dashboard, stored in `kuma_data` | see [What is monitored](#what-is-monitored) |
 | Telegram bot token for alerts | Kuma dashboard only | never in Git or `.env` |
 
-The stack needs no `.env`.
+The stack needs no `.env`. It needs the network `monitoring` of [vps-edge](https://github.com/PhilippKlinger/vps-edge), so vps-edge starts first. Image updates come as Dependabot pull requests; the volume keeps all data.
 
-## Usage on the server
+## What CI checks
 
-Requires [vps-edge](https://github.com/PhilippKlinger/vps-edge) with the network `monitoring` (start or update vps-edge first).
+Every pull request to `main` must pass these checks before a merge:
 
-```bash
-sudo install -d -m 750 -o deploy -g deploy /srv/monitoring
-# copy compose.yaml to /srv/monitoring, then:
-cd /srv/monitoring
-docker compose pull
-docker compose up -d
-docker compose ps            # uptime-kuma: healthy after about a minute
-```
+- **Validate compose and workflows:** compose validation, actionlint
+- **Start stack and check security properties:** a real start of the pinned stack (health, dashboard bound to localhost only, non-root, only the expected networks, no Docker socket)
+- **Scan pinned image (Trivy):** the pinned Kuma image; accepted findings live in `.trivyignore.yaml` with a reason and an expiry date
+- **Security checks:** secret scan (gitleaks), workflow lint (zizmor), CodeQL for the workflows
 
-Open the dashboard from your own machine:
-
-```bash
-ssh -L 3001:127.0.0.1:3001 <user>@<host>
-# then browse http://localhost:3001
-```
-
-Update: change the image in `compose.yaml` through a pull request (Dependabot), then `docker compose pull && docker compose up -d`. The volume keeps all data.
-
-## Runbook
-
-### First setup
-
-1. Open the dashboard through the tunnel and create the admin account (long password), then enable 2FA under *Settings → Security*.
-2. *Settings → General*: time zone `Europe/Berlin`, *Primary Base URL* `https://status.philipp-klinger.com`.
-3. *Settings → Reverse Proxy*: *Trust Proxy* `Yes` (Caddy sets `X-Forwarded-For`).
-4. *Settings → Notifications*: Telegram notification with a dedicated bot (token and chat ID from the password manager), *Default enabled* and *Apply on all existing monitors*, then *Test*.
-
-### Monitors
+## What is monitored
 
 All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Certificate Expiry Notification* on (14 days), accepted status codes 200–299.
 
@@ -92,21 +71,9 @@ All monitors: type HTTP(s), interval 60 s, retries 3, retry interval 60 s, *Cert
 | Blog | `https://philippklinger.github.io/my-dso-blog/` | none (internal) |
 | Statusseite | `https://status.philipp-klinger.com/status/videoflix` | `vps-plattform` |
 
-New projects follow the same pattern: one monitor per public endpoint, one status page per project.
+New projects follow the same pattern: one monitor per public endpoint, one status page per project. Alerts go to Telegram and, as a webhook, to the [incident assistant](https://github.com/PhilippKlinger/vps-incident-assistant).
 
-### Webhook for the incident assistant
-
-*Settings → Notifications*: add a *Webhook* notification and apply it on all monitors.
-
-| Field | Value |
-|---|---|
-| Post URL | `http://incident-assistant:8080/webhook/kuma` |
-| Request Body | `application/json` |
-| Additional Headers | `{"X-Webhook-Secret": "<from the password manager>"}` |
-
-Kuma reaches the assistant over the internal network `incident`, so the assistant stack has to be running for the notification to arrive.
-
-### Status pages
+Status pages:
 
 | Slug | Title | Monitors |
 |---|---|---|
@@ -115,19 +82,7 @@ Kuma reaches the assistant over the internal network `incident`, so the assistan
 | `neuro-check-in` | Neuro Check-in | Neuro Check-in · Web |
 | `vps-plattform` | VPS-Platform | Statusseite |
 
-Leave *Show URL* off, so the page shows neutral names only (no hosts, IPs or ports). `https://status.philipp-klinger.com/` redirects to `/status/videoflix`.
-
-### Rebuild
-
-Without a backup of `kuma_data` (planned together with the project backups), a rebuild means: start the stack, repeat *First setup*, *Monitors* and *Status pages* above. The uptime history starts again from zero.
-
-### Check after a change
-
-```bash
-curl -sI https://status.philipp-klinger.com/status/videoflix | head -1               # 200
-curl -s  https://status.philipp-klinger.com/api/status-page/heartbeat/videoflix | head -c 200
-curl -sI https://status.philipp-klinger.com/dashboard | head -1                      # 404
-```
+*Show URL* is off, so the page shows neutral names only (no hosts, IPs or ports). `https://status.philipp-klinger.com/` redirects to `/status/videoflix`.
 
 ## Limits
 
@@ -157,3 +112,16 @@ Commands run in `/srv/monitoring`. Problems of the proxy itself are in the runbo
 **Fix:** `docker compose up -d --force-recreate` attaches the networks again; a DNS problem of the host is fixed on the host. No change in this repository causes this case, so there is nothing to roll back.
 
 **Way back:** none needed.
+
+## Related repositories
+
+| Repository | Role |
+|---|---|
+| [vps-edge](https://github.com/PhilippKlinger/vps-edge) | Publishes the status page and owns the network `monitoring` |
+| [vps-incident-assistant](https://github.com/PhilippKlinger/vps-incident-assistant) | Receives the alert webhook over the network `incident`, uses the Troubleshooting section above as runbook |
+| [videoflix-deploy](https://github.com/PhilippKlinger/videoflix-deploy) | Videoflix stack, watched by two monitors |
+| [v-server-setup](https://github.com/PhilippKlinger/v-server-setup) | How the server is set up and hardened |
+
+## License
+
+[MIT](LICENSE)
