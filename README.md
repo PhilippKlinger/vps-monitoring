@@ -1,12 +1,12 @@
 # vps-monitoring
 
+Monitoring stack for all projects on the VPS: [Uptime Kuma](https://github.com/louislam/uptime-kuma) checks the public HTTPS addresses, sends alerts and serves the public status page at [status.philipp-klinger.com](https://status.philipp-klinger.com).
+
 [![CI](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/ci.yml/badge.svg)](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/ci.yml)
 [![Security Checks](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/security.yml/badge.svg)](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/security.yml)
 [![CodeQL](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/codeql.yml/badge.svg)](https://github.com/PhilippKlinger/vps-monitoring/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/PhilippKlinger/vps-monitoring/badge)](https://scorecard.dev/viewer/?uri=github.com/PhilippKlinger/vps-monitoring)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-Monitoring stack for all projects on the VPS: [Uptime Kuma](https://github.com/louislam/uptime-kuma) checks the public HTTPS addresses, sends alerts and serves the public status page at [status.philipp-klinger.com](https://status.philipp-klinger.com).
 
 ## Architecture
 
